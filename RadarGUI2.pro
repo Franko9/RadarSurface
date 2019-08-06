@@ -6,6 +6,7 @@
 
 QT       += core gui widgets
 QT       += serialport
+QT       += multimedia
 TARGET = RadarGUI2
 TEMPLATE = app
 
@@ -36,3 +37,5 @@ FORMS += \
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
+
+DISTFILES +=

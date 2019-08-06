@@ -7,12 +7,15 @@
 #include <QtWidgets>
 #include <QDataStream>
 #include <QtEndian>
+#include <QTimer>
 
 #include <QPainter>
 #include <QPaintEvent>
 
 #include <QString>
 #include <iostream>
+
+#include <QSound>
 
 #define X_ZERO 350
 #define Y_ZERO 400
@@ -39,11 +42,15 @@ public:
     bool findMagicWord();
     bool parseData();
     bool currentlyParsing = false;
-    QTimer* timer;
+    QTimer* myTimer = new QTimer;
     void plotObjects(QPainter &p);
     void plotting();
     uint counter = 0;
+
+    QDataStream *stream;
+
     ~Widget();
+
 
 private:
     Ui::Widget *ui;
@@ -57,22 +64,41 @@ private:
     QString radar_port_name;
     bool radar_is_available;
 
+    QSerialPort *arduino;
+    bool arduino_is_available;
+    QString arduino_port_name;
+    QByteArray arduinoSerialData;
+
+    static const quint16 arduino_vendor_ID = 9025;
+    static const quint16 arduino_product_ID = 66;
+
     QByteArray magicWord = QByteArray("\x02\x01\x04\x03\x06\x05\x08\x07", 8); // 2 1 4 3 6 5 8 7
 
     int start, current;
     uint numberObjects;
-    quint16 qValue;
+    quint16 qValue = 512;
     bool ok;
 
     ObjectStruct objects[100];
 
+    void sendToArduino();
+
+    qint16 x = 0;
+    qint16 y = 0;
+    quint8 cond = 0;
+
+
 private slots:
     bool readSerial();
     void paintEvent(QPaintEvent *e);
+    void displayError();
+    void writeSerial();
+    //void checkConnected();
 
 
 
 
+    void on_pushButton_3_clicked();
 };
 
 #endif // WIDGET_H
