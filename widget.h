@@ -17,8 +17,14 @@
 
 #include <QSound>
 
+#include <QProgressBar>
+
 #define X_ZERO 350
 #define Y_ZERO 400
+
+enum Condition{
+    dry, wet, snow, ice
+};
 
 typedef struct ObjectStruct{
     quint16 rangeIndex;
@@ -27,6 +33,7 @@ typedef struct ObjectStruct{
     qint16 x;
     qint16 y;
     qint16 z;
+    Condition cond;
 }ObjectStruct;
 
 namespace Ui {
@@ -43,8 +50,13 @@ public:
     bool parseData();
     bool currentlyParsing = false;
     QTimer* myTimer = new QTimer;
+    QTimer* plotTimer = new QTimer;
+    QTimer* errorTimer = new QTimer;
     void plotObjects(QPainter &p);
-    void plotting();
+    void establishComm();
+
+    QProgressBar* progressBar[12];
+
     uint counter = 0;
 
     QDataStream *stream;
@@ -83,22 +95,23 @@ private:
 
     void sendToArduino();
 
-    qint16 x = 0;
-    qint16 y = 0;
-    quint8 cond = 0;
+    QColor colors[4] = {Qt::green, Qt::blue, Qt::gray, Qt::white};
 
+    int timeNum = 0;
+    bool isData = false;
+
+    double xMin = 100.0, xMax = 100.0, yMin = 100.0, yMax = 100.0;
 
 private slots:
     bool readSerial();
     void paintEvent(QPaintEvent *e);
     void displayError();
     void writeSerial();
+    void plotting();
     //void checkConnected();
-
-
-
-
     void on_pushButton_3_clicked();
+    void timerCheck();
+
 };
 
 #endif // WIDGET_H

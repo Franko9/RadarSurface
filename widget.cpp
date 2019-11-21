@@ -7,8 +7,19 @@ Widget::Widget(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    establishComm();
+}
+
+void Widget::establishComm()
+{
     myTimer->setInterval(2000);
     myTimer->start();
+
+    plotTimer->setInterval(100);
+    plotTimer->start();
+
+    errorTimer->setInterval(1000);
+    errorTimer->start();
 
     radar = new QSerialPort;
     radar_is_available = false;
@@ -48,6 +59,8 @@ Widget::Widget(QWidget *parent) :
         radar->setFlowControl(QSerialPort::NoFlowControl);
 
         QObject::connect(radar, SIGNAL(readyRead()), this, SLOT(readSerial()));
+        QObject::connect(plotTimer, SIGNAL(timeout()), this, SLOT(plotting()));
+        QObject::connect(errorTimer, SIGNAL(timeout()), this, SLOT(timerCheck()));
     }
     else{
         QMessageBox::warning(this, "Radar Port Error", "Couldn't find the radar or port was unavailable");
@@ -85,7 +98,18 @@ Widget::Widget(QWidget *parent) :
         QMessageBox::warning(this, "Arduino Port Error", "Couldn't find the arduino or port was unavailable");
     }
 
-
+    progressBar[0] = ui->progressBar_1;
+    progressBar[1] = ui->progressBar_2;
+    progressBar[2] = ui->progressBar_3;
+    progressBar[3] = ui->progressBar_4;
+    progressBar[4] = ui->progressBar_5;
+    progressBar[5] = ui->progressBar_6;
+    progressBar[6] = ui->progressBar_7;
+    progressBar[7] = ui->progressBar_8;
+    progressBar[8] = ui->progressBar_9;
+    progressBar[9] = ui->progressBar_10;
+    progressBar[10] = ui->progressBar_11;
+    progressBar[11] = ui->progressBar_12;
 }
 
 void Widget::displayError()
@@ -95,6 +119,7 @@ void Widget::displayError()
 
 bool Widget::readSerial()
 {
+    isData = true;
     serialData += radar->readAll();
 
     if(!currentlyParsing)
@@ -152,6 +177,8 @@ bool Widget::parseData()
         serialData += radar->readAll();
     }
 
+    bool value = false;
+
     for(uint i = 0; i < numberObjects; i++)
     {
         //qDebug() << "      Object: " << i+1;
@@ -162,39 +189,72 @@ bool Widget::parseData()
         //qDebug() << "      Range Index: " << objects[i].rangeIndex;
 
         objects[i].peakVal = qFromLittleEndian<quint16>(serialData.mid(current,2));
+
+        if(!value)
+        {
+            arduinoSerialData = serialData.mid(current+1,1);
+            arduinoSerialData += serialData.mid(current,1);
+        }
+
+        if(objects[i].peakVal < 1500)
+        {
+            objects[i].cond = snow;
+        }
+        else if(objects[i].peakVal > 6000)
+        {
+            objects[i].cond = wet;
+        }
+        else{
+            objects[i].cond = dry;
+        }
+
         current += 2;
 
         //qDebug() << "      Peak Value: " << objects[i].peakVal;
 
         objects[i].x = qFromLittleEndian<qint16>(serialData.mid(current,2));
+
+        if(!value)
+        {
+            arduinoSerialData += serialData.mid(current+1,1);
+            arduinoSerialData += serialData.mid(current,1);
+        }
+
         current += 2;
 
         //qDebug() << "      X: " << (float)(objects[i].x)/pow(2,9);
 
         objects[i].y = qFromLittleEndian<qint16>(serialData.mid(current,2));
+
+        if(!value)
+        {
+            arduinoSerialData += serialData.mid(current+1,1);
+            arduinoSerialData += serialData.mid(current,1);
+        }
+
         current += 2;
 
         //qDebug() << "      Y: " << (float)objects[i].y/pow(2,9);
 
         objects[i].z = qFromLittleEndian<qint16>(serialData.mid(current,2))/qValue;
+
         current += 2;
 
         //qDebug() << "      Z: " << (float)objects[i].z/pow(2,9);
 
         if(objects[i].x/qValue < 0.3 && objects[i].x/qValue > -0.3)
         {
-            x = objects[i].x;
-            y = objects[i].y;
-            if(objects[i].peakVal/qValue < 6000)
-            {
-                cond = 1;
-            }
-            else{
-                cond = 2;
-            }
+            value = true;
         }
 
     }
+    value = false;
+
+//    for(uint i = 0; i < numberObjects; i++)
+//    {
+//        qDebug() << progressBar[i];
+//        progressBar[i]->setValue(objects[i].peakVal);
+//    }
 
     if(numberObjects > 0)
     {
@@ -328,10 +388,6 @@ bool Widget::parseData()
         ui->label_12->setText(QString::fromStdString(std::to_string(0)));
     }
 
-    repaint();
-
-    //current = start;
-
     serialData = "";
 
     currentlyParsing = false;
@@ -350,16 +406,12 @@ bool Widget::findMagicWord()
     }
     else{
         current = temp;
-        //qDebug() << "Found Magic Word: " << start;
         return true;
     }
 }
 
 Widget::~Widget()
 {    
-//    QString data = QString::fromStdString(serialData.toStdString());
-//    qDebug() << serialData.toHex();
-
     if(radar->isOpen())
     {
         radar->close();
@@ -386,24 +438,19 @@ void Widget::paintEvent(QPaintEvent *e)
 void Widget::plotObjects(QPainter &p)
 {
     QRectF rectangle(X_ZERO-5, Y_ZERO-5, 20, 20);
-//    QBrush myBrush;
-//    p.setBrush(myBrush);
 
     for(uint i = 0; i < numberObjects; i++)
     {
-        rectangle.moveCenter(QPoint(objects[i].x/qValue*30 + X_ZERO, Y_ZERO - objects[i].y/qValue*30));
-
-        if(true)//objects[i].x > -0.2 && objects[i].x < 0.2 && objects[i].y > 0.8 && objects[i].y < 1.2)
+        if(ui->xCheckBox->isChecked() && ((float)objects[i].x/qValue < ui->xMinSpinBox->value() || (float)objects[i].x/qValue > ui->xMaxSpinBox->value()))
         {
-            if(objects[i].peakVal < 6000 && objects[i].peakVal > 0)
-            {
-                p.fillRect(rectangle, Qt::green);//dry
-            }
-            else
-            {
-                p.fillRect(rectangle, Qt::blue);//wet
-            }
+            continue;
         }
+        if(ui->yCheckBox->isChecked() && ((float)objects[i].y/qValue < ui->yMinSpinBox->value() || (float)objects[i].y/qValue > ui->yMaxSpinBox->value()))
+        {
+            continue;
+        }
+        rectangle.moveCenter(QPoint(objects[i].x/qValue*30 + X_ZERO, Y_ZERO - objects[i].y/qValue*30));
+        p.fillRect(rectangle, colors[objects[i].cond]);
     }
 
 }
@@ -433,37 +480,26 @@ void Widget::on_pushButton_3_clicked()
 
 void Widget::writeSerial()
 {
-    qDebug() << "In Write Serial";
-    qDebug() << "x: " << x;
-    qDebug() << "y: " << y;
-    qDebug() << "cond: " << cond;
-    arduinoSerialData = "";
-//    arduinoSerialData += QString::number(x).toUtf8();
-//    arduinoSerialData += QString::number(y).toUtf8();
-//    arduinoSerialData += cond;
-
-    char *xval = (char*)&x;
-    char *yval = (char*)&y;
-    char *condval = (char*)&cond;
-
-    arduinoSerialData.append(xval);
-    arduinoSerialData.append(yval);
-    arduinoSerialData.append(condval);
-
-    qDebug() << arduinoSerialData.toHex();
-    //QString data = "ABCDE";
-    //arduinoSerialData = data.toUtf8();
     arduino->write(arduinoSerialData);
+
+    arduinoSerialData = "";
 }
 
-//void Widget::sendToArduino()
-//{
-//    arduino->write(QString::number(numberObjects).toStdString().c_str());
-//    for(uint i = 0; i < numberObjects; i++)
-//    {
-//        arduino->write(QString::number(objects[i].x).toStdString().c_str());
-//        arduino->write(QString::number(objects[i].y).toStdString().c_str());
-//        arduino->write(QString::number(objects[i].peakVal).toStdString().c_str());
-//    }
+void Widget::timerCheck()
+{
+    if(isData)
+    {
+        timeNum = 0;
+        isData = false;
+    }
+    else{
+        timeNum++;
+        if(timeNum > 2)
+        {
+            QMessageBox::warning(this, "No Data", "No Data was recieved for over 3 seconds...");
+            timeNum = 0;
+        }
+    }
+}
 
-//}
+
